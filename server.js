@@ -6,9 +6,8 @@ const connectDB = require("./config/db");
 
 const app = express();
 
-//Subjects
+// Subjects
 const subjectRoutes = require("./routes/subjectRoutes");
-
 
 // Middleware
 app.use(cors());
@@ -20,30 +19,24 @@ connectDB();
 // Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 
-//Subject Route
+// Subject Route
 app.use("/api/subjects", subjectRoutes);
 
-//Attdences Route
-// app.use("/api/students", require("./routes/"));  
+// Attendance Route
 app.use("/api/attendance", require("./routes/attendanceRoutes"));
 
-//Result Route
+// Result Route
 app.use("/api/results", require("./routes/resultRoutes"));
 
-//chek usig get
+// User Route
 app.use("/api/users", require("./routes/userRoutes"));
 
-//Adde new Routes
+// Additional Routes
 app.use("/api/departments", require("./routes/departmentRoutes"));
-
 app.use("/api/semesters", require("./routes/semesterRoutes"));
-
 app.use("/api/divisions", require("./routes/divisionRoutes"));
-
 app.use("/api/notices", require("./routes/noticeRoutes"));
-
 app.use("/api/leaves", require("./routes/leaveRoutes"));
-
 app.use("/api/timetables", require("./routes/timetableRoutes"));
 
 app.get("/", (req, res) => {

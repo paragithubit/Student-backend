@@ -10,7 +10,7 @@ exports.assignSubject = async (req, res) => {
     // Validate request data
     if (!subjectId || !teacherId) {
       return res.status(400).json({
-        message: "SubjectId and TeacherId required ",
+        message: "SubjectId and TeacherId required",
       });
     }
 
@@ -31,19 +31,19 @@ exports.assignSubject = async (req, res) => {
     // Check subject existence
     if (!subject) {
       return res.status(404).json({
-        message: "Subject not found ",
+        message: "Subject not found",
       });
     }
 
     res.json({
-      message: "Subject assigned successfully ",
+      message: "Subject assigned successfully",
       subject,
     });
   } catch (err) {
     console.log(err);
 
     res.status(500).json({
-      message: "Assign failed ",
+      message: "Assign failed",
     });
   }
 };
@@ -51,34 +51,27 @@ exports.assignSubject = async (req, res) => {
 // ==========================================
 // 🔹 GET LOGGED-IN TEACHER SUBJECTS
 // ==========================================
-// ==========================================
-// 🔹 GET LOGGED-IN TEACHER SUBJECTS
-// ==========================================
 exports.getMySubjects = async (req, res) => {
   try {
-
-    //  FIXED USER ID
+    // FIXED USER ID
     const teacherId =
       req.user.id ||
       req.user.user?.id;
 
     console.log("TEACHER ID:", teacherId);
 
-    //  GET SUBJECTS
+    // GET SUBJECTS
     const subjects = await Subject.find({
       teacher: teacherId,
     })
-
       .populate(
         "teacher",
         "firstName lastName email"
       )
-
       .populate(
         "department",
         "name"
       )
-
       .populate(
         "semester",
         "name semesterNumber"
@@ -89,7 +82,6 @@ exports.getMySubjects = async (req, res) => {
     res.json(subjects);
 
   } catch (err) {
-
     console.log("GET MY SUBJECTS ERROR:", err);
 
     res.status(500).json({
@@ -115,7 +107,7 @@ exports.getTeacherSubjects = async (req, res) => {
     console.log(err);
 
     res.status(500).json({
-      message: "Error fetching subjects ",
+      message: "Error fetching subjects",
     });
   }
 };
@@ -135,7 +127,85 @@ exports.getAllSubjects = async (req, res) => {
     console.log(err);
 
     res.status(500).json({
-      message: "Error fetching all subjects ",
+      message: "Error fetching all subjects",
+    });
+  }
+};
+
+// ==========================================
+// 🔹 UPDATE SUBJECT (ADMIN)
+// ==========================================
+exports.updateSubject = async (req, res) => {
+  try {
+    const { name, code, teacherId, credits, description } = req.body;
+
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (code) updateData.code = code;
+    if (teacherId) updateData.teacher = teacherId;
+    if (credits !== undefined) updateData.credits = credits;
+    if (description !== undefined) updateData.description = description;
+
+    // Check duplicate code if code is being updated
+    if (code) {
+      const existingSubject = await Subject.findOne({ 
+        code, 
+        _id: { $ne: req.params.id } 
+      });
+
+      if (existingSubject) {
+        return res.status(400).json({
+          message: "Subject code already exists",
+        });
+      }
+    }
+
+    const updatedSubject = await Subject.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate("teacher", "firstName lastName email");
+
+    if (!updatedSubject) {
+      return res.status(404).json({
+        message: "Subject not found",
+      });
+    }
+
+    res.status(200).json({
+      message: "Subject updated successfully",
+      subject: updatedSubject,
+    });
+
+  } catch (err) {
+    console.log("UPDATE SUBJECT ERROR:", err);
+    res.status(500).json({
+      error: err.message,
+    });
+  }
+};
+
+// ==========================================
+// 🔹 DELETE SUBJECT (ADMIN)
+// ==========================================
+exports.deleteSubject = async (req, res) => {
+  try {
+    const deletedSubject = await Subject.findByIdAndDelete(req.params.id);
+
+    if (!deletedSubject) {
+      return res.status(404).json({
+        message: "Subject not found",
+      });
+    }
+
+    res.status(200).json({
+      message: "Subject deleted successfully",
+    });
+
+  } catch (err) {
+    console.log("DELETE SUBJECT ERROR:", err);
+    res.status(500).json({
+      error: err.message,
     });
   }
 };

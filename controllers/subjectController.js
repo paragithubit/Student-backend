@@ -1,34 +1,77 @@
 const Subject = require("../models/Subject");
 
 // ==========================================
+// 🔹 CREATE / ADD SUBJECT (ADMIN)
+// ==========================================
+exports.createSubject = async (req, res) => {
+  try {
+    const { name, code, teacherId, department, semester, credits, description } = req.body;
+
+    if (!name || !code) {
+      return res.status(400).json({
+        message: "Subject name and code are required",
+      });
+    }
+
+    const existingSubject = await Subject.findOne({ code: code.trim().toUpperCase() });
+    if (existingSubject) {
+      return res.status(400).json({
+        message: "Subject code already exists",
+      });
+    }
+
+    const newSubject = new Subject({
+      name: name.trim(),
+      code: code.trim().toUpperCase(),
+      teacher: teacherId || null,
+      department: department || null,
+      semester: semester || null,
+      credits: credits || 0,
+      description: description || "",
+    });
+
+    await newSubject.save();
+
+    const populatedSubject = await Subject.findById(newSubject._id)
+      .populate("teacher", "firstName lastName email")
+      .populate("department", "name")
+      .populate("semester", "name semesterNumber");
+
+    res.status(201).json({
+      message: "Subject created successfully",
+      subject: populatedSubject,
+    });
+  } catch (err) {
+    console.error("CREATE SUBJECT ERROR:", err);
+    res.status(500).json({
+      message: "Error creating subject",
+      error: err.message,
+    });
+  }
+};
+
+// ==========================================
 // 🔹 ASSIGN SUBJECT TO TEACHER (ADMIN)
 // ==========================================
 exports.assignSubject = async (req, res) => {
   try {
     const { subjectId, teacherId } = req.body;
 
-    // Validate request data
     if (!subjectId || !teacherId) {
       return res.status(400).json({
         message: "SubjectId and TeacherId required",
       });
     }
 
-    // Assign teacher to subject
     const subject = await Subject.findByIdAndUpdate(
       subjectId,
-      {
-        teacher: teacherId,
-      },
-      {
-        new: true,
-      }
-    ).populate(
-      "teacher",
-      "firstName lastName email"
-    );
+      { teacher: teacherId },
+      { new: true }
+    )
+      .populate("teacher", "firstName lastName email")
+      .populate("department", "name")
+      .populate("semester", "name semesterNumber");
 
-    // Check subject existence
     if (!subject) {
       return res.status(404).json({
         message: "Subject not found",
@@ -40,10 +83,10 @@ exports.assignSubject = async (req, res) => {
       subject,
     });
   } catch (err) {
-    console.log(err);
-
+    console.error("ASSIGN SUBJECT ERROR:", err);
     res.status(500).json({
       message: "Assign failed",
+      error: err.message,
     });
   }
 };
@@ -53,39 +96,19 @@ exports.assignSubject = async (req, res) => {
 // ==========================================
 exports.getMySubjects = async (req, res) => {
   try {
-    // FIXED USER ID
-    const teacherId =
-      req.user.id ||
-      req.user.user?.id;
+    const teacherId = req.user.id || req.user.user?.id;
 
-    console.log("TEACHER ID:", teacherId);
-
-    // GET SUBJECTS
-    const subjects = await Subject.find({
-      teacher: teacherId,
-    })
-      .populate(
-        "teacher",
-        "firstName lastName email"
-      )
-      .populate(
-        "department",
-        "name"
-      )
-      .populate(
-        "semester",
-        "name semesterNumber"
-      );
-
-    console.log("SUBJECTS:", subjects);
+    const subjects = await Subject.find({ teacher: teacherId })
+      .populate("teacher", "firstName lastName email")
+      .populate("department", "name")
+      .populate("semester", "name semesterNumber");
 
     res.json(subjects);
-
   } catch (err) {
-    console.log("GET MY SUBJECTS ERROR:", err);
-
+    console.error("GET MY SUBJECTS ERROR:", err);
     res.status(500).json({
       message: "Error fetching subjects",
+      error: err.message,
     });
   }
 };
@@ -95,39 +118,40 @@ exports.getMySubjects = async (req, res) => {
 // ==========================================
 exports.getTeacherSubjects = async (req, res) => {
   try {
-    const subjects = await Subject.find({
-      teacher: req.user.id,
-    }).populate(
-      "teacher",
-      "firstName lastName"
-    );
+    const teacherId = req.user.id || req.user.user?.id;
+
+    const subjects = await Subject.find({ teacher: teacherId })
+      .populate("teacher", "firstName lastName email")
+      .populate("department", "name")
+      .populate("semester", "name semesterNumber");
 
     res.json(subjects);
   } catch (err) {
-    console.log(err);
-
+    console.error("GET TEACHER SUBJECTS ERROR:", err);
     res.status(500).json({
       message: "Error fetching subjects",
+      error: err.message,
     });
   }
 };
 
 // ==========================================
-// 🔹 GET ALL SUBJECTS (ADMIN)
+// 🔹 GET ALL SUBJECTS (ADMIN & TEACHER)
 // ==========================================
 exports.getAllSubjects = async (req, res) => {
   try {
-    const subjects = await Subject.find().populate(
-      "teacher",
-      "firstName lastName email"
-    );
+    const subjects = await Subject.find()
+      .populate("teacher", "firstName lastName email")
+      .populate("department", "name")
+      .populate("semester", "name semesterNumber")
+      .sort({ name: 1 });
 
     res.json(subjects);
   } catch (err) {
-    console.log(err);
-
+    console.error("GET ALL SUBJECTS ERROR:", err);
     res.status(500).json({
       message: "Error fetching all subjects",
+      error: err.message,
     });
   }
 };
@@ -137,20 +161,21 @@ exports.getAllSubjects = async (req, res) => {
 // ==========================================
 exports.updateSubject = async (req, res) => {
   try {
-    const { name, code, teacherId, credits, description } = req.body;
+    const { name, code, teacherId, department, semester, credits, description } = req.body;
 
     const updateData = {};
-    if (name) updateData.name = name;
-    if (code) updateData.code = code;
-    if (teacherId) updateData.teacher = teacherId;
+    if (name) updateData.name = name.trim();
+    if (code) updateData.code = code.trim().toUpperCase();
+    if (teacherId !== undefined) updateData.teacher = teacherId || null;
+    if (department !== undefined) updateData.department = department || null;
+    if (semester !== undefined) updateData.semester = semester || null;
     if (credits !== undefined) updateData.credits = credits;
     if (description !== undefined) updateData.description = description;
 
-    // Check duplicate code if code is being updated
     if (code) {
-      const existingSubject = await Subject.findOne({ 
-        code, 
-        _id: { $ne: req.params.id } 
+      const existingSubject = await Subject.findOne({
+        code: code.trim().toUpperCase(),
+        _id: { $ne: req.params.id },
       });
 
       if (existingSubject) {
@@ -164,7 +189,10 @@ exports.updateSubject = async (req, res) => {
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    ).populate("teacher", "firstName lastName email");
+    )
+      .populate("teacher", "firstName lastName email")
+      .populate("department", "name")
+      .populate("semester", "name semesterNumber");
 
     if (!updatedSubject) {
       return res.status(404).json({
@@ -176,9 +204,8 @@ exports.updateSubject = async (req, res) => {
       message: "Subject updated successfully",
       subject: updatedSubject,
     });
-
   } catch (err) {
-    console.log("UPDATE SUBJECT ERROR:", err);
+    console.error("UPDATE SUBJECT ERROR:", err);
     res.status(500).json({
       error: err.message,
     });
@@ -201,9 +228,8 @@ exports.deleteSubject = async (req, res) => {
     res.status(200).json({
       message: "Subject deleted successfully",
     });
-
   } catch (err) {
-    console.log("DELETE SUBJECT ERROR:", err);
+    console.error("DELETE SUBJECT ERROR:", err);
     res.status(500).json({
       error: err.message,
     });

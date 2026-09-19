@@ -7,24 +7,36 @@ const role = require("../middleware/roleMiddleware");
 const {
   markAttendance,
   markSingleAttendance,
-  getAllAttendance, //  FIXED
+  getAllAttendance,
   getAttendanceByDate,
-  getMyAttendance
+  getMyAttendance,
+  updateAttendance,
+  deleteAttendance
 } = require("../controllers/attendanceController");
 
-//  Bulk attendance
-router.post("/mark-bulk", auth, role("teacher"), markAttendance);
+// ==========================================
+// 🔹 ATTENDANCE ROUTES
+// ==========================================
 
-//  Single attendance
-router.post("/mark", auth, role("teacher"), markSingleAttendance);
+// 📋 Bulk attendance (Teacher & Admin)
+router.post("/mark-bulk", auth, role("teacher", "admin"), markAttendance);
 
-//  Admin + Teacher view all attendance
+// ➕ Single attendance (Teacher & Admin)
+router.post("/mark", auth, role("teacher", "admin"), markSingleAttendance);
+
+// 📊 Admin + Teacher view all attendance
 router.get("/", auth, role("admin", "teacher"), getAllAttendance);
 
-//  Student own attendance (IMPORTANT ORDER FIX)
+// 🎓 Student own attendance (Must precede dynamic /:id or /:date routes)
 router.get("/my", auth, role("student"), getMyAttendance);
 
-//  Filter by date (LAST)
-router.get("/:date", auth, role("teacher"), getAttendanceByDate);
+// ✏️ Update attendance record (Admin & Teacher)
+router.put("/:id", auth, role("admin", "teacher"), updateAttendance);
+
+// 🗑️ Delete attendance record (Admin only)
+router.delete("/:id", auth, role("admin"), deleteAttendance);
+
+// 📅 Filter by date (Keep at the end to prevent collision with fixed routes)
+router.get("/:date", auth, role("teacher", "admin"), getAttendanceByDate);
 
 module.exports = router;

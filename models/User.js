@@ -41,7 +41,14 @@ const userSchema = new mongoose.Schema(
       default: "student",
     },
 
-    // Profile picture URL
+    // Student Roll Number
+    rollNumber: {
+      type: String,
+      default: "N/A",
+      trim: true,
+    },
+
+    // Profile picture (Base64 string or URL)
     profilePic: {
       type: String,
       default: "",

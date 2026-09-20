@@ -167,22 +167,19 @@ exports.forgotPassword = async (req, res) => {
     const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
     const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
 
-    // Gmail Transporter with IPv4 explicit routing & timeout guards
+    // 🔹 Render-optimized Gmail Transporter (Uses standard Gmail service configuration)
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true, // SSL on 465
+      service: "gmail",
       auth: {
         user: emailUser,
         pass: emailPass,
       },
-      family: 4, // Forces IPv4 to bypass Render IPv6 connectivity limits
       tls: {
         rejectUnauthorized: false,
       },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 15000,
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 25000,
     });
 
     const mailOptions = {

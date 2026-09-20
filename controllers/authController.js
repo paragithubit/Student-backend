@@ -1,12 +1,8 @@
-const dns = require("dns");
-// 🔹 CRITICAL FOR RENDER: Forces Node to prioritize IPv4 addresses over IPv6
-dns.setDefaultResultOrder("ipv4first");
-
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 // ==========================================
 // 🔹 REGISTER USER
@@ -15,7 +11,6 @@ exports.register = async (req, res) => {
   try {
     const { firstName, lastName, email, password, role } = req.body;
 
-    // Normalizing email to lowercase
     const normalizedEmail = email ? email.trim().toLowerCase() : "";
 
     const existingUser = await User.findOne({ email: normalizedEmail });
@@ -23,10 +18,8 @@ exports.register = async (req, res) => {
       return res.status(400).json({ msg: "User with this email already exists" });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
     const user = new User({
       firstName: firstName?.trim(),
       lastName: lastName?.trim(),
@@ -61,7 +54,7 @@ exports.login = async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Find user by email (case-insensitive)
+    // Case-insensitive lookup
     const user = await User.findOne({
       email: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
     });
@@ -72,7 +65,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -81,7 +73,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate JWT token
     const token = jwt.sign(
       {
         id: user._id,
@@ -122,7 +113,7 @@ exports.login = async (req, res) => {
 };
 
 // ==========================================
-// 🔹 FORGOT PASSWORD
+// 🔹 FORGOT PASSWORD (Resend HTTP API)
 // ==========================================
 exports.forgotPassword = async (req, res) => {
   try {
@@ -136,7 +127,6 @@ exports.forgotPassword = async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Find user case-insensitively
     const user = await User.findOne({
       email: { $regex: new RegExp(`^${cleanEmail}$`, "i") },
     });
@@ -147,22 +137,18 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    // Check email credentials on the server
-    const emailUser = process.env.EMAIL_USER ? process.env.EMAIL_USER.trim() : null;
-    // Strip all spaces from App Password (e.g., 'abcd efgh ijkl mnop' -> 'abcdefghijklmnop')
-    const emailPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, "").trim() : null;
-
-    if (!emailUser || !emailPass) {
-      console.error("CRITICAL: EMAIL_USER or EMAIL_PASS environment variables are missing on Render!");
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.error("CRITICAL: RESEND_API_KEY is not defined in environment variables!");
       return res.status(500).json({
-        message: "Email service is not configured on the server. Please verify EMAIL_USER and EMAIL_PASS environment variables on Render.",
+        message: "Email service is not configured on the server. Missing RESEND_API_KEY.",
       });
     }
 
-    // Generate secure token
-    const resetToken = crypto.randomBytes(20).toString("hex");
+    const resend = new Resend(apiKey.trim());
 
-    // Save token with 10-minute expiry
+    // Generate secure token (10-minute validity)
+    const resetToken = crypto.randomBytes(20).toString("hex");
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
@@ -171,28 +157,10 @@ exports.forgotPassword = async (req, res) => {
     const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
     const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
 
-    // 🔹 Explicit IPv4 + Port 587 STARTTLS (DO NOT use service: "gmail")
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false, // Must be false for 587 (uses STARTTLS)
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-      family: 4, // Forces IPv4 socket connection to eliminate ENETUNREACH
-      tls: {
-        rejectUnauthorized: false,
-        minVersion: "TLSv1.2",
-      },
-      connectionTimeout: 20000,
-      greetingTimeout: 20000,
-      socketTimeout: 25000,
-    });
-
-    const mailOptions = {
-      from: `"Academic Portal" <${emailUser}>`,
-      to: user.email,
+    // Send email via HTTPS API (Port 443 - zero firewall blocks on Render)
+    const { data, error } = await resend.emails.send({
+      from: "Academic Portal <onboarding@resend.dev>",
+      to: [user.email],
       subject: "Password Reset Request",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
@@ -218,21 +186,19 @@ exports.forgotPassword = async (req, res) => {
           </p>
         </div>
       `,
-    };
+    });
 
-    // Send email with dedicated error handling
-    try {
-      await transporter.sendMail(mailOptions);
-      return res.json({
-        message: "Password reset link has been sent to your email.",
-      });
-    } catch (mailError) {
-      console.error("Nodemailer sendMail failed:", mailError);
+    if (error) {
+      console.error("Resend API Error:", error);
       return res.status(502).json({
-        message: "Unable to deliver email via SMTP.",
-        detail: mailError.message,
+        message: "Failed to deliver email through API.",
+        detail: error.message,
       });
     }
+
+    return res.json({
+      message: "Password reset link has been sent to your email.",
+    });
   } catch (err) {
     console.error("Forgot password controller error:", err);
     return res.status(500).json({
@@ -252,12 +218,8 @@ exports.getMe = async (req, res) => {
       .populate({
         path: "division",
         populate: [
-          {
-            path: "department",
-          },
-          {
-            path: "semester",
-          },
+          { path: "department" },
+          { path: "semester" },
         ],
       });
 
@@ -307,11 +269,9 @@ exports.resetPassword = async (req, res) => {
       });
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
 
-    // Clear reset tokens
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 

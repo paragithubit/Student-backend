@@ -1,3 +1,7 @@
+const dns = require("dns");
+// 🔹 CRITICAL FOR RENDER: Forces Node to prioritize IPv4 addresses over IPv6
+dns.setDefaultResultOrder("ipv4first");
+
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -167,15 +171,19 @@ exports.forgotPassword = async (req, res) => {
     const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
     const resetUrl = `${clientUrl.replace(/\/$/, "")}/reset-password/${resetToken}`;
 
-    // 🔹 Render-optimized Gmail Transporter (Uses standard Gmail service configuration)
+    // 🔹 Explicit IPv4 + Port 587 STARTTLS (DO NOT use service: "gmail")
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false, // Must be false for 587 (uses STARTTLS)
       auth: {
         user: emailUser,
         pass: emailPass,
       },
+      family: 4, // Forces IPv4 socket connection to eliminate ENETUNREACH
       tls: {
         rejectUnauthorized: false,
+        minVersion: "TLSv1.2",
       },
       connectionTimeout: 20000,
       greetingTimeout: 20000,
@@ -221,8 +229,8 @@ exports.forgotPassword = async (req, res) => {
     } catch (mailError) {
       console.error("Nodemailer sendMail failed:", mailError);
       return res.status(502).json({
-        message: "Unable to deliver email. Please ensure your Google App Password is correct without spaces.",
-        error: mailError.message,
+        message: "Unable to deliver email via SMTP.",
+        detail: mailError.message,
       });
     }
   } catch (err) {

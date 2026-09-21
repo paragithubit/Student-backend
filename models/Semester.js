@@ -2,22 +2,18 @@ const mongoose = require("mongoose");
 
 const semesterSchema = new mongoose.Schema(
   {
-    // Semester Name
+    // Semester Name (e.g., "Semester 1", "Fall 2026")
     name: {
       type: String,
-      required: true,
+      required: [true, "Semester name is required"],
+      trim: true,
     },
 
-    // Semester Number
-    semesterNumber: {
-      type: Number,
-      required: true,
-    },
-
-    // Department Reference
+    // Department Reference (Optional / Global)
     department: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
+      default: null,
     },
   },
   {
@@ -25,7 +21,7 @@ const semesterSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model(
-  "Semester",
-  semesterSchema
-);
+// Optional: Prevent duplicate semester names under the same department
+semesterSchema.index({ name: 1, department: 1 }, { unique: true });
+
+module.exports = mongoose.model("Semester", semesterSchema);

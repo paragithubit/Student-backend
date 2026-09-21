@@ -8,44 +8,38 @@ require("../models/Department");
 // ==========================================
 exports.createSemester = async (req, res) => {
   try {
-    const { name, semesterNumber, department } = req.body;
+    const { name, department } = req.body;
 
     // Validate required fields
-    if (!name || semesterNumber === undefined || semesterNumber === null || semesterNumber === "") {
+    if (!name || name.trim() === "") {
       return res.status(400).json({
-        message: "Semester name and semester number are required",
-      });
-    }
-
-    const parsedSemesterNumber = Number(semesterNumber);
-    if (isNaN(parsedSemesterNumber)) {
-      return res.status(400).json({
-        message: "Semester number must be a valid number",
+        message: "Semester name is required",
       });
     }
 
     // Sanitize department ID to avoid CastError with empty string ""
     const cleanDepartment =
       department && department.toString().trim() !== "" && department !== "All"
-        ? department
+        ? department.toString().trim()
         : null;
 
-    // Check duplicate semester number under the same department (or globally if no dept)
+    const trimmedName = name.trim();
+
+    // Check duplicate semester name under the same department (or globally if no dept)
     const duplicateQuery = {
-      semesterNumber: parsedSemesterNumber,
+      name: { $regex: new RegExp(`^${trimmedName}$`, "i") },
       department: cleanDepartment,
     };
     const existingSemester = await Semester.findOne(duplicateQuery);
     if (existingSemester) {
       return res.status(400).json({
-        message: `Semester ${parsedSemesterNumber} already exists for this department`,
+        message: `Semester "${trimmedName}" already exists for this department`,
       });
     }
 
     // Create semester safely
     const semester = await Semester.create({
-      name: name.toString().trim(),
-      semesterNumber: parsedSemesterNumber,
+      name: trimmedName,
       department: cleanDepartment,
     });
 
@@ -70,13 +64,13 @@ exports.getAllSemesters = async (req, res) => {
   try {
     const semesters = await Semester.find()
       .populate("department", "name")
-      .sort({ semesterNumber: 1 });
+      .sort({ name: 1, createdAt: 1 });
 
     res.json(semesters);
   } catch (error) {
     console.error("GET SEMESTERS ERROR:", error);
     res.status(500).json({
-      message: error.message,
+      message: error.message || "Failed to fetch semesters",
     });
   }
 };
@@ -86,36 +80,54 @@ exports.getAllSemesters = async (req, res) => {
 // ==========================================
 exports.updateSemester = async (req, res) => {
   try {
-    const { name, semesterNumber, department } = req.body;
+    const { name, department } = req.body;
+    const { id } = req.params;
 
-    const updateData = {};
-    if (name) updateData.name = name.toString().trim();
-    if (semesterNumber !== undefined && semesterNumber !== "") {
-      const parsedNum = Number(semesterNumber);
-      if (!isNaN(parsedNum)) updateData.semesterNumber = parsedNum;
-    }
-    if (department !== undefined) {
-      updateData.department =
-        department && department.toString().trim() !== "" && department !== "All"
-          ? department
-          : null;
-    }
-
-    const semester = await Semester.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { returnDocument: "after", runValidators: true }
-    ).populate("department", "name");
-
-    if (!semester) {
+    const currentSemester = await Semester.findById(id);
+    if (!currentSemester) {
       return res.status(404).json({ message: "Semester not found" });
     }
 
-    res.json(semester);
+    const updateData = {};
+    let targetName = currentSemester.name;
+    if (name && name.trim() !== "") {
+      targetName = name.trim();
+      updateData.name = targetName;
+    }
+
+    let targetDepartment = currentSemester.department;
+    if (department !== undefined) {
+      targetDepartment =
+        department && department.toString().trim() !== "" && department !== "All"
+          ? department.toString().trim()
+          : null;
+      updateData.department = targetDepartment;
+    }
+
+    // Check for duplicate name in same department (excluding this semester)
+    const duplicate = await Semester.findOne({
+      _id: { $ne: id },
+      name: { $regex: new RegExp(`^${targetName}$`, "i") },
+      department: targetDepartment,
+    });
+
+    if (duplicate) {
+      return res.status(400).json({
+        message: `Semester "${targetName}" already exists for this department`,
+      });
+    }
+
+    const updatedSemester = await Semester.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate("department", "name");
+
+    res.json(updatedSemester);
   } catch (error) {
     console.error("UPDATE SEMESTER ERROR:", error);
     res.status(500).json({
-      message: error.message,
+      message: error.message || "Failed to update semester",
     });
   }
 };
@@ -135,7 +147,7 @@ exports.deleteSemester = async (req, res) => {
   } catch (error) {
     console.error("DELETE SEMESTER ERROR:", error);
     res.status(500).json({
-      message: error.message,
+      message: error.message || "Failed to delete semester",
     });
   }
 };

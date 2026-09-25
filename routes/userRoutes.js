@@ -14,9 +14,15 @@ const {
   updateUser
 } = require("../controllers/userController");
 
+// 🔹 Import updateProfile from authController
+const { updateProfile } = require("../controllers/authController");
+
 // ==========================================
 // 🔹 USER ROUTES
 // ==========================================
+
+// 🖼️ UPDATE LOGGED-IN USER PROFILE (Avatar / Name) - All Roles
+router.put("/profile", auth, updateProfile);
 
 // ➕ ADD USER (Admin & Teacher)
 router.post("/add", auth, role("admin", "teacher"), addUser);

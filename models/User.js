@@ -9,12 +9,14 @@ const userSchema = new mongoose.Schema(
     firstName: {
       type: String,
       required: true,
+      trim: true,
     },
 
     // Last name
     lastName: {
       type: String,
       required: true,
+      trim: true,
     },
 
     // User email
@@ -22,6 +24,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       unique: true,
       required: true,
+      trim: true,
+      lowercase: true,
     },
 
     // User password
@@ -33,12 +37,9 @@ const userSchema = new mongoose.Schema(
     // User role
     role: {
       type: String,
-      enum: [
-        "admin",
-        "teacher",
-        "student",
-      ],
+      enum: ["admin", "teacher", "student"],
       default: "student",
+      lowercase: true,
     },
 
     // Student Roll Number
@@ -48,7 +49,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Profile picture (Base64 string or URL)
+    // 🔹 Profile picture (Base64 string or URL isolated per user)
     profilePic: {
       type: String,
       default: "",
@@ -58,18 +59,21 @@ const userSchema = new mongoose.Schema(
     department: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
+      default: null,
     },
 
     // Semester
     semester: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Semester",
+      default: null,
     },
 
     // Division/Class
     division: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Division",
+      default: null,
     },
 
     // Reset password token
@@ -83,7 +87,4 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model(
-  "User",
-  userSchema
-);
+module.exports = mongoose.model("User", userSchema);

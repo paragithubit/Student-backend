@@ -288,3 +288,53 @@ exports.resetPassword = async (req, res) => {
     });
   }
 };
+
+// ==========================================
+// 🔹 UPDATE CURRENT USER PROFILE (AVATAR / PROFILE PIC)
+// ==========================================
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized: No valid user ID found" });
+    }
+
+    const { profilePic, firstName, lastName } = req.body;
+    const updateData = {};
+
+    if (profilePic !== undefined) updateData.profilePic = profilePic;
+    if (firstName) updateData.firstName = firstName.trim();
+    if (lastName) updateData.lastName = lastName.trim();
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: false }
+    )
+      .select("-password")
+      .populate("department")
+      .populate("semester")
+      .populate({
+        path: "division",
+        populate: [
+          { path: "department" },
+          { path: "semester" },
+        ],
+      });
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("updateProfile error:", error);
+    res.status(500).json({
+      message: "Failed to update profile",
+      error: error.message,
+    });
+  }
+};
